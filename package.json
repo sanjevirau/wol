@@ -5,6 +5,10 @@
   "description": "Simple wake on lan",
   "icon": "command-icon.png",
   "author": "Lemon",
+  "owner": "Lemon",
+  "contributors": [
+    "sanjevirau"
+  ],
   "categories": [
     "System"
   ],
