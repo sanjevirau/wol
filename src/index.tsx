@@ -13,7 +13,11 @@ const Shortcut = Keyboard.Shortcut;
 const PING_INTERVAL = 8000;
 
 export default function Command() {
-  const { value: devices = [], setValue: setDevices, isLoading: isLoadingDevices } = useLocalStorage<WakeData[]>("wakeDatasets", []);
+  const {
+    value: devices = [],
+    setValue: setDevices,
+    isLoading: isLoadingDevices,
+  } = useLocalStorage<WakeData[]>("wakeDatasets", []);
   const [networkInfoMap, setNetworkInfoMap] = useState<Map<string, NetworkInfo>>(new Map());
   const [isInitialPingComplete, setIsInitialPingComplete] = useState(false);
   const [isPinging, setIsPinging] = useState(false);
@@ -27,33 +31,30 @@ export default function Command() {
   // Combined loading state: loading devices OR doing any ping operation
   const isLoading = isLoadingDevices || (!isInitialPingComplete && devices.length > 0) || isPinging;
 
-  const ping = useCallback(
-    (devicesData: WakeData[]) => {
-      // Prevent overlapping ping operations
-      if (isPingingRef.current) {
-        return;
+  const ping = useCallback((devicesData: WakeData[]) => {
+    // Prevent overlapping ping operations
+    if (isPingingRef.current) {
+      return;
+    }
+
+    isPingingRef.current = true;
+    setIsPinging(true);
+
+    (async () => {
+      const map = new Map<string, NetworkInfo>();
+      for (const device of devicesData) {
+        // Get previous lastSeen to preserve for offline devices
+        const previousInfo = networkInfoMapRef.current.get(device.ip);
+        const networkInfo = await enhancedPing(device.ip, device.mac, previousInfo?.lastSeen);
+        map.set(device.ip, networkInfo);
       }
-      
-      isPingingRef.current = true;
-      setIsPinging(true);
-      
-      (async () => {
-        const map = new Map<string, NetworkInfo>();
-        for (const device of devicesData) {
-          // Get previous lastSeen to preserve for offline devices
-          const previousInfo = networkInfoMapRef.current.get(device.ip);
-          const networkInfo = await enhancedPing(device.ip, device.mac, previousInfo?.lastSeen);
-          map.set(device.ip, networkInfo);
-        }
-        setNetworkInfoMap(map);
-        isPingingRef.current = false;
-        setIsPinging(false);
-        // Mark initial ping as complete
-        setIsInitialPingComplete(true);
-      })();
-    },
-    [],
-  );
+      setNetworkInfoMap(map);
+      isPingingRef.current = false;
+      setIsPinging(false);
+      // Mark initial ping as complete
+      setIsInitialPingComplete(true);
+    })();
+  }, []);
 
   // Initial ping and setup periodic pinging
   useEffect(() => {
@@ -69,15 +70,15 @@ export default function Command() {
 
     // Reset initial ping completion when devices change
     setIsInitialPingComplete(false);
-    
+
     // Initial ping
     ping(devices);
-    
+
     // Setup periodic pinging
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
-    
+
     intervalRef.current = setInterval(() => {
       ping(devices);
     }, PING_INTERVAL);
@@ -133,11 +134,7 @@ export default function Command() {
   }, [devices]);
 
   return (
-    <List 
-      isLoading={isLoading} 
-      isShowingDetail={devices.length > 0}
-      searchBarPlaceholder="Search devices..."
-    >
+    <List isLoading={isLoading} isShowingDetail={devices.length > 0} searchBarPlaceholder="Search devices...">
       <List.EmptyView
         title="Add a new device"
         actions={
@@ -177,7 +174,7 @@ export default function Command() {
                   await showToast({ title: "Order acknowledged!", message: "For the Swarm" });
                 }}
               />
-              <Action.CopyToClipboard title="Copy MAC Address" content={item.mac} shortcut={Shortcut.Common.Copy} />
+              <Action.CopyToClipboard title="Copy Mac Address" content={item.mac} shortcut={Shortcut.Common.Copy} />
               <Action
                 title="Refresh Status"
                 icon={Icon.ArrowClockwise}
@@ -216,16 +213,16 @@ export default function Command() {
             <List.Item.Detail
               metadata={(() => {
                 const networkInfo = networkInfoMap.get(item.ip);
-                
+
                 // Check if sections have content
                 const hasHardwareInfo = networkInfo?.detectedOS || networkInfo?.ttl;
-                
+
                 return (
                   <List.Item.Detail.Metadata>
                     {/* Basic Device Info */}
                     <List.Item.Detail.Metadata.Label title="Device Name" text={item.name} />
                     <List.Item.Detail.Metadata.Separator />
-                    
+
                     {/* Network Identification */}
                     <List.Item.Detail.Metadata.Label title="MAC Address" text={item.mac} />
                     <List.Item.Detail.Metadata.Label title="IP Address" text={item.ip} />
@@ -233,7 +230,7 @@ export default function Command() {
                       <List.Item.Detail.Metadata.Label title="Hostname" text={networkInfo.hostname} />
                     )}
                     <List.Item.Detail.Metadata.Label title="WOL Port" text={item.port} />
-                    
+
                     {/* Hardware Info - Only show separator if there's content */}
                     {hasHardwareInfo && <List.Item.Detail.Metadata.Separator />}
                     {networkInfo?.detectedOS && (
@@ -242,39 +239,36 @@ export default function Command() {
                     {networkInfo?.ttl && (
                       <List.Item.Detail.Metadata.Label title="TTL" text={networkInfo.ttl.toString()} />
                     )}
-                    
+
                     {/* Connection Status - Always show separator since status is always present */}
                     <List.Item.Detail.Metadata.Separator />
-                    <List.Item.Detail.Metadata.Label 
-                      title="Status" 
-                      text={networkInfo?.isOnline ? "🟢 Online" : "🔴 Offline"} 
+                    <List.Item.Detail.Metadata.Label
+                      title="Status"
+                      text={networkInfo?.isOnline ? "🟢 Online" : "🔴 Offline"}
                     />
                     {networkInfo?.latency && (
-                      <List.Item.Detail.Metadata.Label 
-                        title="Response Time" 
-                        text={`${networkInfo.latency.toFixed(1)}ms`} 
+                      <List.Item.Detail.Metadata.Label
+                        title="Response Time"
+                        text={`${networkInfo.latency.toFixed(1)}ms`}
                       />
                     )}
                     {networkInfo?.quality && (
-                      <List.Item.Detail.Metadata.Label 
-                        title="Connection Quality" 
+                      <List.Item.Detail.Metadata.Label
+                        title="Connection Quality"
                         text={
-                          networkInfo.quality === 'excellent' ? '🟢 Excellent' :
-                          networkInfo.quality === 'good' ? '🟡 Good' : '🔴 Poor'
-                        } 
+                          networkInfo.quality === "excellent"
+                            ? "🟢 Excellent"
+                            : networkInfo.quality === "good"
+                              ? "🟡 Good"
+                              : "🔴 Poor"
+                        }
                       />
                     )}
                     {networkInfo?.packetLoss !== undefined && (
-                      <List.Item.Detail.Metadata.Label 
-                        title="Packet Loss" 
-                        text={`${networkInfo.packetLoss}%`} 
-                      />
+                      <List.Item.Detail.Metadata.Label title="Packet Loss" text={`${networkInfo.packetLoss}%`} />
                     )}
                     {networkInfo?.lastSeen && (
-                      <List.Item.Detail.Metadata.Label 
-                        title="Last Seen" 
-                        text={networkInfo.lastSeen.toLocaleString()} 
-                      />
+                      <List.Item.Detail.Metadata.Label title="Last Seen" text={networkInfo.lastSeen.toLocaleString()} />
                     )}
                   </List.Item.Detail.Metadata>
                 );

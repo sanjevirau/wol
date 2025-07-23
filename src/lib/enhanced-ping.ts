@@ -9,8 +9,6 @@ function detectOSFromTTL(ttl: number): string {
   return "Unknown";
 }
 
-
-
 // Enhanced ping that collects detailed network information
 export function enhancedPing(ip: string, mac?: string, previousLastSeen?: Date): Promise<NetworkInfo> {
   return new Promise((resolve) => {
@@ -19,7 +17,7 @@ export function enhancedPing(ip: string, mac?: string, previousLastSeen?: Date):
       const networkInfo: NetworkInfo = {
         isOnline: false,
         // Keep previous lastSeen for offline devices
-        lastSeen: previousLastSeen
+        lastSeen: previousLastSeen,
       };
 
       if (err) {
@@ -36,11 +34,11 @@ export function enhancedPing(ip: string, mac?: string, previousLastSeen?: Date):
       const timeMatch = stdout.match(/time=([0-9.]+)\s*ms/);
       if (timeMatch) {
         networkInfo.latency = parseFloat(timeMatch[1]);
-        
+
         // Determine connection quality based on latency
-        if (networkInfo.latency < 10) networkInfo.quality = 'excellent';
-        else if (networkInfo.latency < 50) networkInfo.quality = 'good';
-        else networkInfo.quality = 'poor';
+        if (networkInfo.latency < 10) networkInfo.quality = "excellent";
+        else if (networkInfo.latency < 50) networkInfo.quality = "good";
+        else networkInfo.quality = "poor";
       }
 
       // Extract TTL
@@ -74,5 +72,5 @@ export function enhancedPing(ip: string, mac?: string, previousLastSeen?: Date):
 
 // Simple ping for compatibility with existing code
 export function simplePing(ip: string): Promise<boolean> {
-  return enhancedPing(ip).then(info => info.isOnline);
-} 
+  return enhancedPing(ip).then((info) => info.isOnline);
+}
